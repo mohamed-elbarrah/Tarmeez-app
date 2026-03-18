@@ -1,0 +1,9 @@
+[submodule "client"]
+	path = client
+	url = https://github.com/mohamed-elbarrah/tarmeez-client.git
+	branch = main
+
+[submodule "server"]
+	path = server
+	url = https://github.com/mohamed-elbarrah/tarmeez-server.git
+	branch = main
