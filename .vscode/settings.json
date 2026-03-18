@@ -1,0 +1,12 @@
+{
+    "chat.instructionsFilesLocations": {
+    ".vscode/instructions": true
+  },
+    "chat.tools.terminal.autoApprove": {
+        "npx tsc": true,
+        "npm install": true,
+        "mv": true,
+        "Group-Object": true
+    },
+    
+}
