@@ -50,11 +50,14 @@ services:
       # نمرر الروابط هنا لتتخطى أي إعدادات Localhost قديمة
       DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres_main:5432/platform_db"
       ANALYTICS_DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres_analytics:5432/analytics_db"
+      NODE_ENV: "production"
+      CLIENT_URL: "http://localhost:3000"
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "8000"] # يتأكد أن المنفذ 8000 مفتوح
-      interval: 3s
-      timeout: 3s
-      retries: 10
+      # wget is available in Alpine; nc requires netcat-openbsd which is installed in the Dockerfile
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/api/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     ports:
       - "8000:8000"
 
@@ -66,8 +69,12 @@ services:
     depends_on:
       server:
         condition: service_healthy
-    command: /bin/sh -c "sleep 3 && node server.js" # تأخير إضافي لمدة 3 ثوانٍ كما طلبت
+    command: /bin/sh -c "sleep 3 && node server.js"
     env_file: ./client/.env
+    environment:
+      # Override the SSR-only API URL to use internal Docker hostname.
+      # NEXT_PUBLIC_API_URL stays as localhost:8000 (baked into browser bundle at build).
+      API_URL: "http://server:8000/api"
     ports:
       - "3000:3000"
 
