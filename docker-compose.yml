@@ -91,3 +91,10 @@ services:
 volumes:
   postgres_main_data:
   postgres_analytics_data:
+
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1400
