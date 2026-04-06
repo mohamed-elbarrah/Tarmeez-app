@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: platform_db  # تم التغيير ليطابق ما يطلبه السيرفر
+      POSTGRES_DB: platform_db # تم التغيير ليطابق ما يطلبه السيرفر
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d platform_db"]
       interval: 5s
@@ -35,6 +35,15 @@ services:
     ports:
       - "5433:5432"
 
+  # Redis (BullMQ queue)
+  redis:
+    image: redis:7.2-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   # الواجهة الخلفية (Backend)
   server:
     build: ./server
@@ -45,6 +54,8 @@ services:
         condition: service_healthy
       postgres_analytics:
         condition: service_healthy
+      redis:
+        condition: service_started
     env_file: ./server/.env
     environment:
       # نمرر الروابط هنا لتتخطى أي إعدادات Localhost قديمة
@@ -52,13 +63,16 @@ services:
       ANALYTICS_DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres_analytics:5432/analytics_db"
       NODE_ENV: "development"
       CLIENT_URL: "http://localhost:3000"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
     command: sh -c "npx prisma migrate deploy && npm run start:dev -- --outDir /tmp/dist"
     volumes:
       - ./server:/app:Z
       - /app/node_modules
     healthcheck:
       # wget is available in Alpine; nc requires netcat-openbsd which is installed in the Dockerfile
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/api/health"]
+      test:
+        ["CMD", "wget", "--spider", "-q", "http://localhost:8000/api/health"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -91,7 +105,7 @@ services:
 volumes:
   postgres_main_data:
   postgres_analytics_data:
-
+  redis_data:
 
 networks:
   default:
