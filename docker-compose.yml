@@ -93,7 +93,8 @@ services:
     volumes:
       - /opt/tarmeez/data/uploads:/app/uploads
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/api/health"]
+      test:
+        ["CMD", "wget", "--spider", "-q", "http://localhost:8000/api/health"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -159,33 +160,35 @@ services:
     restart: always
     ports:
       - "80:80"
-      - "443:443"
+      # - "443:443" # commented out for HTTP testing (restore when enabling SSL)
     depends_on:
       - client
       - server
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
-      - /opt/tarmeez/data/certbot/conf:/etc/letsencrypt
-      - /opt/tarmeez/data/certbot/www:/var/www/certbot
+      # SSL volumes (commented out for HTTP testing)
+      # - /opt/tarmeez/data/certbot/conf:/etc/letsencrypt
+      # - /opt/tarmeez/data/certbot/www:/var/www/certbot
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
     networks:
       - internal
 
   # Certbot لإصدار الشهادات
-  certbot:
-    image: certbot/certbot
-    restart: always
-    volumes:
-      - /opt/tarmeez/data/certbot/conf:/etc/letsencrypt
-      - /opt/tarmeez/data/certbot/www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-    networks:
-      - internal
+  # Certbot لإصدار الشهادات (commented out for HTTP testing)
+  # certbot:
+  #   image: certbot/certbot
+  #   restart: always
+  #   volumes:
+  #     - /opt/tarmeez/data/certbot/conf:/etc/letsencrypt
+  #     - /opt/tarmeez/data/certbot/www:/var/www/certbot
+  #   entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+  #   networks:
+  #     - internal
 
 networks:
   internal:
