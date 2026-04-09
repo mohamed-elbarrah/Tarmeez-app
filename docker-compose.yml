@@ -1,21 +1,26 @@
 services:
-  # قاعدة البيانات الأساسية
+  # الأساسية قاعدة البيانات
   postgres_main:
     image: postgres:15-alpine
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: platform_db # تم التغيير ليطابق ما يطلبه السيرفر
+      POSTGRES_DB: platform_db
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d platform_db"]
       interval: 5s
       timeout: 5s
       retries: 5
     volumes:
-      - postgres_main_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - /opt/tarmeez/data/postgres_main:/var/lib/postgresql/data
+    networks:
+      - internal
 
   # قاعدة بيانات الإحصائيات (TimescaleDB)
   postgres_analytics:
@@ -24,91 +29,166 @@ services:
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: analytics_db # تم التغيير ليطابق ما يطلبه السيرفر
+      POSTGRES_DB: analytics_db
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d analytics_db"]
       interval: 5s
       timeout: 5s
       retries: 5
     volumes:
-      - postgres_analytics_data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
+      - /opt/tarmeez/data/postgres_analytics:/var/lib/postgresql/data
+    networks:
+      - internal
 
   # Redis (BullMQ queue)
   redis:
     image: redis:7.2-alpine
     restart: always
-    ports:
-      - "6379:6379"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     volumes:
-      - redis_data:/data
+      - /opt/tarmeez/data/redis:/data
+    networks:
+      - internal
 
-  # الواجهة الخلفية (Backend)
+  # الواجهة الخلفية - الخادم (API Server)
   server:
     build: ./server
     restart: always
-    # يمنع تشغيل السيرفر إلا بعد جاهزية القواعد تماماً
     depends_on:
       postgres_main:
         condition: service_healthy
       postgres_analytics:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     env_file: ./server/.env
     environment:
-      # نمرر الروابط هنا لتتخطى أي إعدادات Localhost قديمة
       DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres_main:5432/platform_db"
       ANALYTICS_DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres_analytics:5432/analytics_db"
-      NODE_ENV: "development"
-      CLIENT_URL: "http://localhost:3000"
+      NODE_ENV: "production"
+      APP_ROLE: "server"
+      CLIENT_URL: "https://tarmeezhub.com"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
-    command: sh -c "npx prisma migrate deploy && npm run start:dev -- --outDir /tmp/dist"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: sh -c "npx prisma migrate deploy && node dist/src/main.js"
     volumes:
-      - ./server:/app:Z
-      - /app/node_modules
+      - /opt/tarmeez/data/uploads:/app/uploads
     healthcheck:
-      # wget is available in Alpine; nc requires netcat-openbsd which is installed in the Dockerfile
-      test:
-        ["CMD", "wget", "--spider", "-q", "http://localhost:8000/api/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/api/health"]
       interval: 5s
       timeout: 5s
       retries: 12
-    ports:
-      - "8000:8000"
+    networks:
+      - internal
+
+  # الواجهة الخلفية - المعالج (Worker)
+  worker:
+    build: ./server
+    restart: always
+    depends_on:
+      postgres_main:
+        condition: service_healthy
+      postgres_analytics:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: ./server/.env
+    environment:
+      DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres_main:5432/platform_db"
+      ANALYTICS_DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres_analytics:5432/analytics_db"
+      NODE_ENV: "production"
+      APP_ROLE: "worker"
+      CLIENT_URL: "https://tarmeezhub.com"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Wait for the server to run migrations, or simply skip it.
+    command: node dist/src/main.js
+    stop_grace_period: 30s
+    volumes:
+      - /opt/tarmeez/data/uploads:/app/uploads
+    networks:
+      - internal
 
   # الواجهة الأمامية (Frontend)
   client:
     build: ./client
     restart: always
-    # لن يبدأ إلا بعد نجاح السيرفر في تخطي الـ Healthcheck
     depends_on:
       server:
         condition: service_healthy
-    command: npm run dev
     env_file: ./client/.env
     environment:
-      NODE_ENV: "development"
-      # URL داخلي للـ SSR (server-side rendering داخل Docker)
+      NODE_ENV: "production"
       API_URL: "http://server:8000/api"
-      # URL عام للمتصفح (client-side)
-      NEXT_PUBLIC_API_URL: "http://localhost:8000/api"
-    volumes:
-      - ./client:/app:Z
-      - /app/node_modules
-      - /app/.next
-    ports:
-      - "3000:3000"
+      NEXT_PUBLIC_API_URL: "https://tarmeezhub.com/api"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - internal
 
-volumes:
-  postgres_main_data:
-  postgres_analytics_data:
-  redis_data:
+  # الوكيل العكسي (Nginx Reverse Proxy)
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - client
+      - server
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - /opt/tarmeez/data/certbot/conf:/etc/letsencrypt
+      - /opt/tarmeez/data/certbot/www:/var/www/certbot
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    networks:
+      - internal
+
+  # Certbot لإصدار الشهادات
+  certbot:
+    image: certbot/certbot
+    restart: always
+    volumes:
+      - /opt/tarmeez/data/certbot/conf:/etc/letsencrypt
+      - /opt/tarmeez/data/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - internal
 
 networks:
-  default:
+  internal:
     driver: bridge
     driver_opts:
       com.docker.network.driver.mtu: 1400
