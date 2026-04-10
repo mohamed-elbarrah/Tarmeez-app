@@ -21,7 +21,7 @@ cat << 'EOF' > nginx/conf.d/default.conf
 server {
     listen 80;
     listen [::]:80;
-    server_name tarmeezhub.com www.tarmeezhub.com;
+    server_name tarmeez.cloud www.tarmeez.cloud;
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -39,7 +39,7 @@ docker-compose up -d nginx
 
 # 4. Fetch the initial certificate (Step B)
 echo "-> Fetching initial SSL certificate..."
-docker-compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot -d tarmeezhub.com -d www.tarmeezhub.com --email admin@tarmeezhub.com --agree-tos --no-eff-email
+docker-compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot -d tarmeez.cloud -d www.tarmeez.cloud --email elbarrahsimo@gmail.com --agree-tos --no-eff-email
 
 # 5. Restore production configuration and reload (Step C)
 echo "-> Restoring production Nginx config..."

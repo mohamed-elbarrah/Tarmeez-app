@@ -81,7 +81,7 @@ services:
       ANALYTICS_DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres_analytics:5432/analytics_db"
       NODE_ENV: "production"
       APP_ROLE: "server"
-      CLIENT_URL: "https://tarmeezhub.com"
+      CLIENT_URL: "https://tarmeez.cloud"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
     logging:
@@ -89,7 +89,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    command: sh -c "npx prisma migrate deploy && node dist/src/main.js"
+    command: sh -c "npx prisma migrate deploy && for f in dist/scripts/*.js; do node \"$$f\"; done && node dist/src/main.js"
     volumes:
       - /opt/tarmeez/data/uploads:/app/uploads
     healthcheck:
@@ -118,7 +118,7 @@ services:
       ANALYTICS_DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres_analytics:5432/analytics_db"
       NODE_ENV: "production"
       APP_ROLE: "worker"
-      CLIENT_URL: "https://tarmeezhub.com"
+      CLIENT_URL: "https://tarmeez.cloud"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
     logging:
@@ -145,7 +145,7 @@ services:
     environment:
       NODE_ENV: "production"
       API_URL: "http://server:8000/api"
-      NEXT_PUBLIC_API_URL: "https://tarmeezhub.com/api"
+      NEXT_PUBLIC_API_URL: "https://tarmeez.cloud/api"
     logging:
       driver: "json-file"
       options:
@@ -160,35 +160,34 @@ services:
     restart: always
     ports:
       - "80:80"
-      # - "443:443" # commented out for HTTP testing (restore when enabling SSL)
+      - "443:443"
     depends_on:
       - client
       - server
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
-      # SSL volumes (commented out for HTTP testing)
-      # - /opt/tarmeez/data/certbot/conf:/etc/letsencrypt
-      # - /opt/tarmeez/data/certbot/www:/var/www/certbot
+      - ./nginx/entrypoint.sh:/entrypoint.sh
+      - /opt/tarmeez/data/certbot/conf:/etc/letsencrypt
+      - /opt/tarmeez/data/certbot/www:/var/www/certbot
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
+    command: /entrypoint.sh
     networks:
       - internal
 
   # Certbot لإصدار الشهادات
-  # Certbot لإصدار الشهادات (commented out for HTTP testing)
-  # certbot:
-  #   image: certbot/certbot
-  #   restart: always
-  #   volumes:
-  #     - /opt/tarmeez/data/certbot/conf:/etc/letsencrypt
-  #     - /opt/tarmeez/data/certbot/www:/var/www/certbot
-  #   entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-  #   networks:
-  #     - internal
+  certbot:
+    image: certbot/certbot
+    restart: always
+    volumes:
+      - /opt/tarmeez/data/certbot/conf:/etc/letsencrypt
+      - /opt/tarmeez/data/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - internal
 
 networks:
   internal:
