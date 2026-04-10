@@ -89,7 +89,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    command: sh -c "npx prisma migrate deploy && for f in dist/scripts/*.js; do node \"$$f\"; done && node dist/src/main.js"
+    command: sh -c "npx prisma migrate deploy && node dist/src/main.js"
     volumes:
       - /opt/tarmeez/data/uploads:/app/uploads
     healthcheck:
@@ -138,6 +138,7 @@ services:
   client:
     build: ./client
     restart: always
+    command: node server.js
     depends_on:
       server:
         condition: service_healthy
@@ -156,14 +157,19 @@ services:
 
   # الوكيل العكسي (Nginx Reverse Proxy)
   nginx:
-    image: nginx:alpine
+    build: ./nginx
     restart: always
+    entrypoint: /entrypoint.sh
     ports:
       - "80:80"
       - "443:443"
     depends_on:
-      - client
-      - server
+      client:
+        condition: service_started
+      server:
+        condition: service_started
+    environment:
+      - DOMAIN=tarmeez.cloud
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./nginx/entrypoint.sh:/entrypoint.sh
@@ -174,7 +180,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    command: /entrypoint.sh
+
     networks:
       - internal
 
