@@ -76,13 +76,13 @@ fi
 log "Building services sequentially..."
 
 log "Building Server..."
-if ! docker compose build server; then
+if ! docker compose build --no-cache server; then
   error_log "Server build failed!"
   exit 1
 fi
 
 log "Building Client..."
-if ! docker compose build client; then
+if ! docker compose build --no-cache client; then
   error_log "Client build failed!"
   exit 1
 fi

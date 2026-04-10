@@ -136,7 +136,12 @@ services:
 
   # الواجهة الأمامية (Frontend)
   client:
-    build: ./client
+    build:
+      context: ./client
+      # NEXT_PUBLIC_* vars must be injected at BUILD time so Next.js can
+      # inline them into the client bundle. Runtime env vars have no effect.
+      args:
+        NEXT_PUBLIC_API_URL: "https://tarmeez.cloud/api"
     restart: always
     command: node server.js
     depends_on:
